@@ -6,13 +6,104 @@ An Agent skill for converting MODIS HDF files to GeoTIFF format with correct Sin
 
 This skill converts MODIS HDF-EOS files to GeoTIFF format while preserving the original Sinusoidal projection. It automatically detects the product type, resolution, and geographic bounds from the HDF file metadata, ensuring accurate georeferencing.
 
+## Processing Workflow 
+
+example:user input a file   MOD13Q1.A2024161.h29v09.061.2024181211247.hdf
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Input: MOD13Q1.A2024161.h29v09.061.2024181211247.hdf          │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Step 1: Parse Filename                                        │
+│     Product type: MOD13Q1                                      │
+│     Date: A2024161 → 20240609                                  │
+│     Tile: h29v09                                               │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Step 2: Open HDF File (pyhdf)                                 │
+│     Read StructMetadata.0                                      │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Step 3: Extract Coordinate Info from   StructMetadata.0       │
+│     UpperLeft: (12231455.716, 0.0)                             │
+│     LowerRight: (13343406.236, -1111950.52)                    │
+│     Dimensions: 4800 × 4800                                    │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Step 4: Calculate Projection Parameters                       │
+│     resolution = (13343406 - 12231455) / 4800 = 231.656m       │
+│     geotransform = (12231455.716, 231.656, 0, 0, 0, -231.656)  │
+│     projection = Sinusoidal WKT                                │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Step 5: Report to User                                        │
+│     ┌──────────────────────────────────────────────────────┐   │
+│     │ File Analysis Report:                                │   │
+│     │   Product: MOD13Q1 (MODIS Vegetation Indices)        │   │
+│     │   Date: 2024-06-09 (Day 161)                         │   │
+│     │   Tile: h29v09                                       │   │
+│     │   Resolution: 231.656m (~250m)                       │   │
+│     │   Dimensions: 4800 × 4800 pixels                     │   │
+│     │   Coverage: ~1112km × ~1112km                        │   │
+│     │                                                      │   │
+│     │ Available Datasets:                                  │   │
+│     │   1. 250m 16 days NDVI (Vegetation Index)            │   │
+│     │   2. 250m 16 days EVI (Enhanced Vegetation Index)    │   │
+│     │   3. 250m 16 days VI Quality (Quality Assessment)    │   │
+│     │   ...                                                │   │
+│     └──────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Step 6: User Selection                                        │
+│     User selects: NDVI, pixel reliability                      │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Step 7: Convert Each Dataset                                  │
+│     - Read data array                                          │
+│     - Create GeoTIFF                                           │
+│     - Set geotransform + projection                            │
+│     - Write data                                               │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────┐
+│  Output:                                                       │
+│  - MOD13Q1_20240609_250m_16_days_NDVI.tif                      │
+│  - MOD13Q1_20240609_250m_16_days_pixel_reliability.tif         │
+└────────────────────────────────────────────────────────────────┘
+```
+
+## Data Source & Calculation
+
+| Data | Source | Method |
+|------|--------|--------|
+| UpperLeft | StructMetadata.0 | Extracted directly |
+| LowerRight | StructMetadata.0 | Extracted directly |
+| XDim, YDim | StructMetadata.0 | Extracted directly |
+| **Resolution** | Calculated | `(LR_X - UL_X) / XDim` |
+| **Geotransform** | Calculated | `(UL_X, resolution, 0, UL_Y, 0, -resolution)` |
+| Projection WKT | Fixed | Sinusoidal (MODIS standard) |
+
+**All coordinate and resolution values are dynamically calculated from metadata, no hardcoded values!**
+
 ## Features
 
 - **Automatic metadata extraction**: Reads projection information directly from HDF file metadata
-- **Dynamic resolution calculation**: Computes pixel resolution from actual geographic bounds
-- **Multiple dataset support**: Can convert any dataset within the HDF file (NDVI, EVI, quality bands, etc.)
-- **Batch conversion**: Supports converting multiple files at once
-- **Sinusoidal projection**: Preserves the original MODIS Sinusoidal coordinate system
 
 ## Supported Products
 
@@ -32,14 +123,20 @@ MODIS HDF-EOS files with similar structure
 
 ### Setup
 
-```bash
-# Create and activate conda environment
-conda create -n geo_env python=3.9
-conda activate geo_env
+This skill requires a Python environment with the following packages:
+- `pyhdf` - For reading HDF4 files
+- `gdal` - For creating GeoTIFF files
+- `numpy` - For array operations
+- `tqdm` - For progress bar display (optional)
 
-# Install required packages
+Install in your existing environment:
+```bash
+# Using conda
 conda install -c conda-forge gdal numpy
 pip install pyhdf tqdm
+
+# Or using pip only
+pip install gdal numpy pyhdf tqdm
 ```
 
 ## Usage
@@ -65,10 +162,7 @@ print(result)
 ### Command Line
 
 ```bash
-# Activate environment
-conda activate geo_env
-
-# Run conversion
+# Run conversion in your Python environment
 python -c "
 import sys
 sys.path.insert(0, 'path/to/hdf-to-geotiff-converter/scripts')
@@ -133,38 +227,6 @@ Main entry point for skill execution.
 
 **Returns:**
 - `dict`: Conversion result
-
-## Output Files
-
-The converted GeoTIFF files are named using the pattern:
-```
-{PRODUCT}_{DATE}_{RESOLUTION}_{DATASET}.tif
-```
-
-Example: `MOD13Q1_20230809_250m_16_days_NDVI.tif`
-
-## Projection Information
-
-The converted GeoTIFF files use the MODIS Sinusoidal projection:
-
-- **Projection**: Sinusoidal (GCTP_SNSOID)
-- **Datum**: Custom sphere (6371007.181m)
-- **Units**: Meters
-- **Pixel resolution**: Dynamically calculated from file metadata
-
-### Geotransform Parameters
-
-The geotransform is calculated dynamically from the HDF file's StructMetadata:
-
-```
-(x_min, pixel_width, 0, y_max, 0, -pixel_height)
-```
-
-Example for tile h29v09 (250m):
-```
-(12231455.716333, 231.65635826395825, 0.0, 0.0, 0.0, -231.65635826395825)
-```
-
 
 
 ## Acknowledgments
