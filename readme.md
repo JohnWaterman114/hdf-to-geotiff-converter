@@ -1,6 +1,6 @@
 # MODIS HDF to GeoTIFF Converter
 
-A Trae AI skill for converting MODIS HDF files to GeoTIFF format with correct Sinusoidal projection.
+An Agent skill for converting MODIS HDF files to GeoTIFF format with correct Sinusoidal projection, guiding users to select which datasets to convert.
 
 ## Overview
 
@@ -165,30 +165,10 @@ Example for tile h29v09 (250m):
 (12231455.716333, 231.65635826395825, 0.0, 0.0, 0.0, -231.65635826395825)
 ```
 
-## Troubleshooting
 
-### "Error opening file" / "SD (7): Error opening file"
-
-The HDF file may be corrupted or incomplete. Try re-downloading the file.
-
-### "Another program is using this file"
-
-Close any programs that may have the output file open (QGIS, etc.) or choose a different output directory.
-
-### Wrong projection in output
-
-Ensure you're using the latest version of the converter. The projection is now dynamically calculated from file metadata.
-
-### Date parsing fails
-
-Verify the filename follows MODIS naming convention: `PRODUCT.AYYYYDDD.TILE.VERSION.hdf`
-
-## License
-
-This project is for research and educational purposes.
 
 ## Acknowledgments
 
-- MODIS data provided by NASA LP DAAC
-- Uses pyhdf library for HDF4 file reading
-- Uses GDAL for GeoTIFF creation
+This project is for research and educational purposes.
+
+
